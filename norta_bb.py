@@ -112,6 +112,7 @@ def C_n(rho,sq_means,sq_vars,values,marginals,rad_inf,N_uv):
 # Given: C_ij(-1) = rho_X_min
 # Given: C_ij(0) = 0
 # Given: C_ij continuous
+# Assume: C_ij ~ quadratic fit with data on endpoints and at zero
 # TRY:  d C_ij / d rho_Z = d/d rho_Z { quadratic fit to C_ij }
 def K_n(x,y_min,y_max):
     return (y_max - y_min) / 2. + (y_max + y_min) * x
