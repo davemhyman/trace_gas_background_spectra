@@ -604,14 +604,14 @@ def bg_spectrum_sampler(path_to_cov_file, path_to_marginals_file, path_to_output
         fileC = Dataset(path_to_cov_file,'r')
         covariance = fileC['cov_mw'][:]
         wavenumbers = fileC['wnum_mw'][:]
-        season = fileC['bin_season'][:]
-        lat = fileC['bin_latitude'][:]
-        lon = fileC['bin_longitude'][:]
         fileC.close()
         fileM = Dataset(path_to_marginals_file,'r')
         values = fileM['BT_mw'][:]
         marginal_pdf = fileM['PDF'][:]
         marginals = fileM['CDF'][:]
+	season = fileM['bin_season'][:]
+        lat = fileM['bin_latitude'][:]
+        lon = fileM['bin_longitude'][:]
         fileM.close()
         # ----------------------------------------------------------------------
         #
