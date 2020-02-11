@@ -1,13 +1,25 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Fri Nov 30 10:13:52 2018
+bg_spectrum_sampling.py
 
-@author: dave.hyman(at)ssec.wisc.edu  --or--  dhyman2(at)wisc.edu
+Last Updated: 11 February, 2020
+
+author:
+Dave M. Hyman, PhD
+Cooperative Institute for Meteorological Satellite Studies (CIMSS)
+Space Science and Engineering Center (SSEC)
+University of Wisconsin - Madison
+Madison, WI, 53706
+
+dave.hyman(at)ssec.wisc.edu  --or--  dhyman2(at)wisc.edu
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
-This function generates samples of random vectors of dimension N:
+This script contains functions for generating CrIS background spectrum
+samples by the NORTA process for generating
+correlated random vectors with arbitrary marginals.
+
+NORTA Process::
+Generate samples of random vectors of dimension N:
 X = (X1, X2, ..., XN)
 subject to the following data:
 
@@ -96,12 +108,15 @@ Sounder (CrIS), Atmospheric  Measurement  Techniques, (in review), 2020.
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 """
-################################################################################
+import os
 import numpy as np
 import math as m
+from netCDF4 import Dataset
 import time
 from scipy.stats import norm
 from scipy.integrate import simps
+################################################################################
+
 ################################################################################
 # FUNCTIONS --------------------------------------------------------------------
 ################################################################################
@@ -532,4 +547,162 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
         return X_samples,cov_Z,errors,iter
         ########################################################################
     ############################################################################
+################################################################################
+#
+#
+#
+################################################################################
+def bg_spectrum_sampler(path_to_cov_file, path_to_marginals_file, path_to_output_file, tol_dist = 1e-5, tol_corr = 5e-5, N_uv = 200, N_s = 10000, max_iters = 15):
+    # --------------------------------------------------------------------------
+    #
+    # Generate a new NetCDF file (path_to_output_file) which contains
+    ## samples of the background spectrum characterized by the
+    ## covariance matrix and marginal distributions
+    ## contained in path_to_cov_file, path_to_marginals_file.
+    ##
+    ## use the NORTA parameters:
+    ## tol_dist = channel marginal distribution error tolerance
+    ## tol_corr = channel pair correlation error tolerance
+    ## N_uv = number of 1D integration samples
+    ## N_s = number of output random spectrum samples
+    ## max_iters = max number of NORTA inversion gradient descent iterations
+    # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    #
+    # Clock Start Time
+    # --------------------------------------------------------------------------
+    print('START TIME:')
+    print time.ctime(time.time())
+    # --------------------------------------------------------------------------
+    #
+    # Only proceed if file does not already exist
+    # --------------------------------------------------------------------------
+    if not os.path.isfile(path_to_output_file):
+        print('#')
+        print('#')
+        print('-------------------------------------------------')
+        print('-------------------------------------------------')
+        print('-------------------------------------------------')
+        print('-------------------------------------------------')
+        print('-------------------------------------------------')
+        print('SAMPLING BACKGROUND SPECTRUM:')
+        print('Covariance from: ' + path_to_cov_file)
+        print('Marginals from: ' + path_to_marginals_file)
+        print('---------------------')
+        print('#')
+        print('#')
+        print('#')
+        print('#')
+        # ----------------------------------------------------------------------
+        #
+        # From Covariance, Marginals files (NetCDF), Extract:
+        ## wavenumbers for each channel (wnum_mw)
+        ## covariance matrix for each channel (cov)
+        ## brightness temperatures values for each channel (BT_mw)
+        ## PDF, CDF for each channel
+        # ----------------------------------------------------------------------
+        fileC = Dataset(path_to_cov_file,'r')
+        covariance = fileC['cov_mw'][:]
+        wavenumbers = fileC['wnum_mw'][:]
+        season = fileC['bin_season'][:]
+        lat = fileC['bin_latitude'][:]
+        lon = fileC['bin_longitude'][:]
+        fileC.close()
+        fileM = Dataset(path_to_marginals_file,'r')
+        values = fileM['BT_mw'][:]
+        marginal_pdf = fileM['PDF'][:]
+        marginals = fileM['CDF'][:]
+        fileM.close()
+        # ----------------------------------------------------------------------
+        #
+        # Generate mean, variance from piecewise-constant PDFs
+        ## (vectorized, elementwise computation)
+        ## replace main diagonal of covariance with
+        ## variances computed from PDFs
+        # ----------------------------------------------------------------------
+        dvalues = np.diff(values, axis=-1)[:,0]
+        marginal_mean = np.sum(marginal_pdf * (values + (1./2.)*dvalues[:,None]) * dvalues[:,None],axis = -1)
+        marginal_var = np.sum(marginal_pdf * (values**2 + values*dvalues[:,None] + (1./3.)*dvalues[:,None]**2) * dvalues[:,None],axis = -1) - marginal_mean**2
+        covariance = covariance - np.diag(np.diag(covariance)) + np.diag(marginal_var)
+        # ----------------------------------------------------------------------
+        #
+        # Call to NORTA sampling function
+        # ----------------------------------------------------------------------
+        bg_spectra, cov_Z, errors, iter = NORTA_sample(
+            values,
+            marginals,
+            marginal_pdf,
+            covariance,
+            N_s,
+            tol_dist,
+            tol_corr,
+            N_uv,
+            max_iters
+            )
+        ########################################################################
+        ########################################################################
+        # ----------------------------------------------------------------------
+        #
+        # Generate NetCDF file of NORTA output
+        # ----------------------------------------------------------------------
+        print('-------------------------------------------------')
+        print('GENERATING NETCDF FILE:')
+        dataset = Dataset(path_to_output_file, 'w')
+        # DIMENSIONS
+        n_wnum = dataset.createDimension('wnum', m)
+        n_samples = dataset.createDimension('samples', N_s)
+        nchar = dataset.createDimension('str_dim', 1)
+        bin_ends = dataset.createDimension('bin_ends', 2)
+        # VARIABLES
+        samples = dataset.createVariable('bg_spectral_samples',np.float32, ('samples','wnum'))
+        norta_cov = dataset.createVariable('norta_cov',np.float32, ('wnum','wnum'))
+        wnum = dataset.createVariable('wnum',np.float32, ('wnum',))
+        err_corr = dataset.createVariable('CPCE',np.float32) # Channel Pair Correlation Error
+        err_dist = dataset.createVariable('CMDE',np.float32) # Channel Marginal Distribution Error
+        bin_season = dataset.createVariable('bin_season',str, ('str_dim',))
+        bin_latitude = dataset.createVariable('bin_latitude',np.int16, ('bin_ends',))
+        bin_longitude = dataset.createVariable('bin_longitude',np.int16, ('bin_ends',))
+        # GLOBAL ATTRIBUTES
+        dataset.description = 'Correlated background spectral samples conforming to ' \
+            + 'the measured channel marginal distribution and covariance matrix ' \
+            + 'generated by the NORTA (NORmal To Anything) procedure for non-normal marginals.' \
+            + 'These sample cover SO2 - free background brightness temperature spectra representing ' \
+            +'a 5 deg latitude x 5 deg longitude x season binning.'
+        dataset.history = 'Created ' + time.ctime(time.time())
+        # VARIABLE ATTRIBUTES
+        samples.units = 'K'
+        norta_cov.units = 'none'
+        err_corr.units = 'Error per channel'
+        err_dist.units = 'Error per channel pair'
+        wnum.units = 'cm^-1'
+        bin_latitude.units = 'degree_north'
+        bin_longitude.units = 'degree_east'
+        samples.description = 'NORTA - derived correlated random spectrum samples'
+        norta_cov.description = 'NORTA - derived multivariate standard normal covariance'
+        wnum.description = 'CrIS FSR midwave wavenumbers used in sample'
+        err_corr.description = 'Channel Pair Correlation coefficient Error per channel pair'
+        err_dist.description = 'Channel Marginal Distribution Error - L2 mean value norm on each channel'
+        bin_season.description = 'right half-open time (seasonal) interval'
+        bin_latitude.description = 'right half-open latitude interval'
+        bin_longitude.description = 'right half-open longitude interval'
+        # ADD VALUES TO VARIABLES
+        #
+        samples[:] = np.float32(bg_spectra)
+        norta_cov[:] = np.float32(cov_Z)
+        wnum[:] = np.float32(wavenumbers)
+        err_corr[:] = np.float32(errors[0])
+        err_dist[:] = np.float32(errors[1])
+        bin_season[:] = season
+        bin_latitude[:] = lat
+        bin_longitude[:] = lon
+        # WRITE FILE
+        dataset.close()
+    ############################################################################
+    ############################################################################
+    ############################################################################
+    ############################################################################
+    print('END TIME:')
+    print time.ctime(time.time())
+    print('-------------------------------------------------')
+    print('-------------------------------------------------')
 ################################################################################
