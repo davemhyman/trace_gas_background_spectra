@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 import time
 import itertools
-os.chdir('/home/dhyman/py_testing')
+import sys
+sys.path.append('/home/dhyman/py_testing')
 from norta_bb import *
 
 # 1300 cm^-1 --> wnum_mw[146]
