@@ -82,6 +82,7 @@ def irbnd_pdf(r):
 # INVERSE MARGINAL DISTRIBUTION: X = F^-1(U) -----------------------------------
 ################################################################################
 def Finv(U,X,F):
+    # Compute piecewise marginal CDF inverse
     F[0] = 0.0
     F[-1] = 1.0
     return np.interp(U,F,X)
@@ -89,32 +90,54 @@ def Finv(U,X,F):
 # CORRELATION FUNCTION: rho_X = C_ij(rho_Z) ------------------------------------
 ################################################################################
 def C_n(rho,sq_means,sq_vars,values,marginals,rad_inf,N_uv):
+    # Forward Model: Correlation function
+    # Evaluate the correlation function as a vector 
+    # where each element is a pairwise correlation.
+    #
+    #
+    # Generate list of lower triangle indices
     idzip = zip(*np.tril_indices(values.shape[0],-1))
+    # Initialize output
     Cn = 0.0 + rho
+    # Set N polar coordinate samples: 
+    # Should both be odd, N_rad ~ 2 * N_theta 
     N_rad = N_uv + (1 -  N_uv%2)
     N_theta = N_uv/2 + (1 -  (N_uv/2)%2)
+    # Set up integral sample space:
+    # rad_inf ~ inf up to error
     rad = np.linspace(0,rad_inf,N_rad)
     theta = np.linspace(0,2*np.pi,N_theta)
+    # zi in polar coordinates
     zi = rad[:,None]*np.cos(theta)
     tol = (4*np.pi / N_uv)**4
     for n in range(len(idzip)):
         i,j = idzip[n]
+        # zj in polar coordinates
         zj = rad[:,None]*( rho[n]*np.cos(theta) + m.sqrt(max(1.0-rho[n]**2, 0.0))*np.sin(theta) )
+        # Inverse transform zi, zj, form product Yi * Yj
         YiYj = Finv(norm.cdf(zi),values[i],marginals[i]) * Finv(norm.cdf(zj),values[j],marginals[j])
+        # Compute Expected Value(Yi * Yj)
+        # Double integral by Simpsons rule 
+        # plus random noise ~ O(Simpson's Rule Error)
         E = simps( rad * irbnd_pdf(rad) * simps(YiYj , theta, axis =-1), rad) + (2.0*np.random.rand()-1.0)*tol
+        # Compute correlation for each pair
         Cn[n] = (E - sq_means[n])/m.sqrt(sq_vars[n])
     return Cn
 ################################################################################
-# CORRELATION FUNCTION JACOBIAN: d C_ij / d rho_Z ------------------------------
+# CORRELATION FUNCTION "JACOBIAN": d C_ij / d rho_Z ----------------------------
 ################################################################################
-# Given: d C_ij / d rho_Z >= 0
-# Given: C_ij(+1) = rho_X_max
-# Given: C_ij(-1) = rho_X_min
-# Given: C_ij(0) = 0
-# Given: C_ij continuous
-# Assume: C_ij ~ quadratic fit with data on endpoints and at zero
-# TRY:  d C_ij / d rho_Z = d/d rho_Z { quadratic fit to C_ij }
 def K_n(x,y_min,y_max):
+    # Given: d C_ij / d rho_Z >= 0
+    # Given: C_ij(+1) = rho_X_max
+    # Given: C_ij(-1) = rho_X_min
+    # Given: C_ij(0) = 0
+    # Given: C_ij continuous
+    # Assume: C_ij ~ quadratic fit with data on endpoints and at zero
+    # d C_ij / d rho_Z = d/d rho_Z { quadratic fit to C_ij }
+    # This will speed things up significantly 
+    # and does not significantly hurt the minimization
+    # becasue of the "nice" properties of C_ij 
+    #
     return (y_max - y_min) / 2. + (y_max + y_min) * x
 ################################################################################
 # BEGIN NORTA FUNCTION----------------------------------------------------------
@@ -155,6 +178,7 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
         print('-------------------------------------------------')
         print('-------------------------------------------------')
         dvalues = np.diff(values, axis=-1)[:,0]
+        # Compute marginal mean, var for a piecewise constant pdf (histogram)
         marginal_mean = np.sum(marginal_pdf * (values + (1./2.)*dvalues[:,None]) * dvalues[:,None],axis = -1)
         marginal_var = np.sum(marginal_pdf * (values**2 + values*dvalues[:,None] + (1./3.)*dvalues[:,None]**2) * dvalues[:,None],axis = -1) - marginal_mean**2
         corr = covariance/(np.sqrt(marginal_var[:,None]*marginal_var[None,:]))
@@ -169,10 +193,13 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
         min_sqvals = (values[:,0][:,None]*values[:,0][:,None].T)[idx_ltri]
         sq_means = (marginal_mean[:,None]*marginal_mean[:,None].T)[idx_ltri]
         sq_vars = (marginal_var[:,None]*marginal_var[:,None].T)[idx_ltri]
+        # Set tolerance for the expectation integral and
+        # to calculate rad_inf (minimum approximation of infinite radius)
         eps = 1e-6
         rad_inf = np.sqrt( 2*np.log(max_sqvals.max()) - 2*np.log(eps* min_sqvals.min()) )
         print('------------- CALCULATING MIN , MAX -------------')
         print('-------------------------------------------------')
+        # Calculate Min, Max of Correlation Function
         C_min  = C_n(-1.0 + 0.0*rho_X ,sq_means,sq_vars,values,marginals,rad_inf,N_uv)
         C_max  = C_n( 1.0 + 0.0*rho_X ,sq_means,sq_vars,values,marginals,rad_inf,N_uv)
         ########################################################################
@@ -180,17 +207,27 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
         ########################################################################
         print('-------------- BEGINNING ITERATION --------------')
         print('-------------------------------------------------')
-        # BEGIN ITERATION
-        err_dist_per = 1.
-        err_corr_per = 1.
         #
         start = time.time()
+        # BEGIN ITERATION
+        # Initialize variables:
+        #
+        # Mean error per channel marginal distribution 
+        err_dist_per = 1.
+        # Mean error per channel-pair correlation 
+        err_corr_per = 1.
+        # Initialize rho_Z guess (= rho_X)
         rho_Z0 = 0.0 + rho_X
         t0 = time.time()
         iter = 1
+        # Forward Model
         C0 = C_n(rho_Z0 ,sq_means,sq_vars,values,marginals,rad_inf,N_uv)
+        # Jacobian
         J0 = K_n(rho_Z0 , C_min, C_max)
+        # Initial Step Size = 1. unless rho_Z0 very close to 1.0
+        # minimum initial step = 0.1
         ds = np.maximum( 1. - (1.-0.1)*np.exp(500.*(rho_Z0**2 - 1.0)) , 0.1 ).min()
+        # Maintain rho_Z within 1e-6 of +- 1.0
         rho_Z1 = np.maximum( np.minimum(rho_Z0 - ds*(C0 - rho_X)*J0 , 1.0 - 1e-6) , -1.0 + 1e-6)
         rho_Z2 = 0. + rho_Z1
         err = C0 - rho_X
@@ -204,18 +241,24 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
         print('#')
         print('#')
         while (err_dist_per > tol_dist or err_corr_per > tol_corr) and iter <= max_iters:
+            # BEGIN MODIFIED BARZILAI-BORWEIN (BB) ITERATION
             t0 = time.time()
             iter += 1
+            # FORWARD MODEL
             C1  = C_n(rho_Z1 ,sq_means,sq_vars,values,marginals,rad_inf,N_uv)
+            # JACOBIAN
             J1 = K_n(rho_Z1 , C_min, C_max)
+            # COMPUTE GRADIENT, BB-STEP SIZE (gamma)
             grad0 = (C0 - rho_X)*J0
             grad1 = (C1 - rho_X)*J1
             drho_Z = rho_Z1 - rho_Z0
             dgrad = grad1 - grad0
             gamma = drho_Z.dot(dgrad)/(dgrad.dot(dgrad))
+            # RELAX BB STEP BY A FACTOR IN [0.1,1.0]
             ds = np.maximum( 1. - (1.-0.1)*np.exp(500.*(rho_Z1**2 - 1.0)) , 0.1 ).min()
+            # UPDATE AND SET VALUES FOR NEXT STEP
             rho_Z2 = np.maximum( np.minimum(rho_Z1 - ds*gamma*grad1  , 1.0 - 1e-6) , -1.0 + 1e-6)
-            # SET VALUES FOR NEXT STEP
+            # 
             C0 = 0. + C1
             J0 = 0. + J1
             rho_Z0 = 0. + rho_Z1
@@ -227,12 +270,13 @@ def NORTA_sample(values,marginals,marginal_pdf,covariance,size,tol_dist,tol_corr
             print 'Total C(rho_Z)-rho_X Square Error = {n1}'.format(n1 = err.dot(err))
             print 'Iteration Time = {n1}'.format(n1 = t1 - t0)
             print('#')
+            # GENERATE CANDIDATE STANDARD NORMAL RANDOM VECTOR (Z)
             lower_triangle_Z[idx_ltri] = rho_Z2
             cov_Z = lower_triangle_Z + lower_triangle_Z.T + np.eye(N)
             Z_samples = np.random.multivariate_normal(mu_Z,cov_Z,size)
             X_samples = 0. * Z_samples
-            F = 0.0*marginals
-            f = 0.0*F[:,0:-1]
+            F = 0.0*marginals # CDF
+            f = 0.0*F[:,0:-1] # PDF
             ####################################################################
             # TRANSFORM STANDARD NORMAL RANDOM VECTOR
             # BY INVERSE MARGINAL DISTRIBUTION TRANSFORM
