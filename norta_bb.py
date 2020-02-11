@@ -100,7 +100,7 @@ def C_n(rho,sq_means,sq_vars,values,marginals,rad_inf,N_uv):
     # Initialize output
     Cn = 0.0 + rho
     # Set N polar coordinate samples: 
-    # Should both be odd, N_rad ~ 2 * N_theta 
+    # N should be odd (even number of intervals), N_rad ~ 2 * N_theta 
     N_rad = N_uv + (1 -  N_uv%2)
     N_theta = N_uv/2 + (1 -  (N_uv/2)%2)
     # Set up integral sample space:
@@ -109,6 +109,10 @@ def C_n(rho,sq_means,sq_vars,values,marginals,rad_inf,N_uv):
     theta = np.linspace(0,2*np.pi,N_theta)
     # zi in polar coordinates
     zi = rad[:,None]*np.cos(theta)
+    # Generate Simpson's method error noise
+    # most of the error comes from the angular integration
+    # step size: h = 2*pi / (N/2) = 4*pi/N
+    # error ~ O(h**4)
     tol = (4*np.pi / N_uv)**4
     for n in range(len(idzip)):
         i,j = idzip[n]
@@ -118,7 +122,8 @@ def C_n(rho,sq_means,sq_vars,values,marginals,rad_inf,N_uv):
         YiYj = Finv(norm.cdf(zi),values[i],marginals[i]) * Finv(norm.cdf(zj),values[j],marginals[j])
         # Compute Expected Value(Yi * Yj)
         # Double integral by Simpsons rule 
-        # plus random noise ~ O(Simpson's Rule Error)
+        # + random noise ~ O(Simpson's Rule Error)
+        # This prevents limit cycles in the minimization
         E = simps( rad * irbnd_pdf(rad) * simps(YiYj , theta, axis =-1), rad) + (2.0*np.random.rand()-1.0)*tol
         # Compute correlation for each pair
         Cn[n] = (E - sq_means[n])/m.sqrt(sq_vars[n])
