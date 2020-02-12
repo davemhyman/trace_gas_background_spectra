@@ -604,6 +604,7 @@ def bg_spectrum_sampler(path_to_cov_file, path_to_marginals_file, path_to_output
         fileC = Dataset(path_to_cov_file,'r')
         covariance = fileC['cov_mw'][:]
         wavenumbers = fileC['wnum_mw'][:]
+	m = len(wavenumbers)
         fileC.close()
         fileM = Dataset(path_to_marginals_file,'r')
         values = fileM['BT_mw'][:]

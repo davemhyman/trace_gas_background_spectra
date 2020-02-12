@@ -41,11 +41,11 @@ from bg_spectrum_sampling import *
 # ------------------------------------------------------------------------------
 # Sampling Inputs:
 # ------------------------------------------------------------------------------
-path_to_cov_file = 'CrIS.bg.mw_cov.summ.lon=-120.lat=+45.nc'
+path_to_cov_file = 'CrIS.bg.example.cov.nc'
 #
-path_to_marginals_file = 'CrIS.bg.mw_marginal_dist.summ.lon=-120.lat=+45.nc'
+path_to_marginals_file = 'CrIS.bg.example.marginals.nc'
 #
-path_to_output_file = 'CrIS.bg.spectra.summ.lon=-120.lat=+45.nc'
+path_to_output_file = 'CrIS.bg.example.spectra.nc'
 #
 tol_dist = 1e-5
 #
