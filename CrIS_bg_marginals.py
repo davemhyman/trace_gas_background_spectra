@@ -31,7 +31,7 @@ from bg_aux import *
 #
 #
 ################################################################################
-def get_all_bg_mean_and_std(path_to_cov_data, season_bins, lat_bins, lon_bins, n_mw):
+def get_all_bg_mean_and_std(path_to_cov_database, season_bins, lat_bins, lon_bins, n_mw):
     # --------------------------------------------------------------------------
     # Initialize Background Dimensions
     #
@@ -46,10 +46,10 @@ def get_all_bg_mean_and_std(path_to_cov_data, season_bins, lat_bins, lon_bins, n
     all_BT_mean = np.zeros((n_seas, n_lat, n_lon, n_mw), dtype = np.float64)
     all_BT_std = np.zeros((n_seas, n_lat, n_lon, n_mw), dtype = np.float64)
     #
-    if path_to_cov_data[-1] != '/':
-        path_to_cov_data = path_to_cov_data + '/'
+    if path_to_cov_database[-1] != '/':
+        path_to_cov_database = path_to_cov_database + '/'
     #
-    prestr = path_to_cov_data + 'CrIS.bg.mw_cov.'
+    prestr = path_to_cov_database + 'CrIS.bg.mw_cov.'
     #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):
@@ -307,8 +307,8 @@ def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
     # Get Background mean and std spectra
     #
     # --------------------------------------------------------------------------
-    path_to_cov_data = '/data/dhyman/CrIS_bg_cov_f32/'
-    all_BT_mean, all_BT_std = get_all_bg_mean_and_std(path_to_cov_data, season_bins, lat_bins, lon_bins, n_mw)
+    path_to_cov_database = '/data/dhyman/CrIS_bg_cov_f32/'
+    all_BT_mean, all_BT_std = get_all_bg_mean_and_std(path_to_cov_database, season_bins, lat_bins, lon_bins, n_mw)
     # --------------------------------------------------------------------------
     # Generate Histogram Domains
     #
@@ -354,7 +354,7 @@ def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
 #
 #
 ################################################################################
-def CrIS_bg_cov_main(url_list, path_to_marginals_data):
+def CrIS_bg_marginals_main(url_list, path_to_marginals_database):
     # --------------------------------------------------------------------------
     # Main routine to compute background marginal distributions
     ## and save them into individual background bin files.
@@ -383,10 +383,10 @@ def CrIS_bg_cov_main(url_list, path_to_marginals_data):
     ## marginals file name prefix
     #
     # --------------------------------------------------------------------------
-    if path_to_marginals_data[-1] != '/':
-        path_to_marginals_data = path_to_marginals_data + '/'
+    if path_to_marginals_database[-1] != '/':
+        path_to_marginals_database = path_to_marginals_database + '/'
     #
-    prestr = path_to_marginals_data + 'CrIS.bg.mw_marginals.'
+    prestr = path_to_marginals_database + 'CrIS.bg.mw_marginals.'
     #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):

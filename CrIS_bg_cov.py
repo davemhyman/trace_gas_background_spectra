@@ -89,8 +89,8 @@ def update_cov_variables_one_spectrum(sum_yyT, sum_y, N_in_bin, bt, seas_num, la
     # Identify background bin index for spectrum
     #
     # --------------------------------------------------------------------------
-    ln = lonbin(lon[n])
-    lt = latbin(lat[n])
+    ln = lonbin(lon)
+    lt = latbin(lat)
     lon_idx = ((ln+180)/5).astype(int)
     lat_idx = ((lt+90)/5).astype(int)
     bin_idx = seas_num, lat_idx, lon_idx
@@ -218,7 +218,7 @@ def generate_CrIS_bg_cov(url_list, season_bins, lat_bins, lon_bins):
 #
 #
 ################################################################################
-def CrIS_bg_cov_main(url_list):
+def CrIS_bg_cov_main(url_list, path_to_cov_data):
     # --------------------------------------------------------------------------
     # Main routine to compute background covariance variables
     ## and save them into individual background bin files.
@@ -247,7 +247,11 @@ def CrIS_bg_cov_main(url_list):
     ## Covariance file name prefix
     #
     # --------------------------------------------------------------------------
-    prestr = '/data/dhyman/CrIS_bg_cov_f32/CrIS.bg.mw_cov.'
+    if path_to_cov_data[-1] != '/':
+        path_to_cov_data = path_to_cov_data + '/'
+    #
+    prestr = path_to_cov_data + 'CrIS.bg.mw_cov.'
+    #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):
             for lon_idx in range(n_lon):
