@@ -254,3 +254,30 @@ def cris_data_quality(array1, qual, lw_qual, mw_qual, sw_qual):
 #
 #
 ################################################################################
+def sensor_parameters(sensor_name):
+    valid_sensors = ['CrIS', 'IASI', 'AIRS']
+    if sensor_name not in valid_sensors:
+        error_msg = 'argument must be a valid hyperspectral IR instrument in: [' + ', '.join(valid_sensors) +']'
+        print(error_msg)
+    else:
+        if sensor_name == 'CrIS':
+            NEdN = 0.05 # NEdN CrIS mid-wave avg: for Planck func cutoff (set cutoff as 0.5 * NEdN)
+            atrack, xtrack, fov = 45, 30, 9 # CrIS granule dimensions
+            band = np.arange(146,322+1) # relevant CrIS midwave channel indices
+            # required CrIS variable names
+            varnames = ['obs_time_utc', 'lat', 'lon', 'rad_mw', 'wnum_mw', 'cal_qualflag', 'cal_lw_qualflag', 'cal_mw_qualflag', 'cal_sw_qualflag']
+            dims = [atrack, xtrack, fov]
+        elif sensor_name == 'IASI':
+            raise TypeError('IASI not yet supported')
+            #
+            #
+        elif sensor_name == 'AIRS':
+            raise TypeError('AIRS not yet supported')
+            #
+            #
+        return varnames, band, dims, NEdN
+################################################################################
+#
+#
+#
+################################################################################

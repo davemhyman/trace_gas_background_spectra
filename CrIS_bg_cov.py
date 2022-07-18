@@ -1,5 +1,5 @@
 """
-Last Updated: 6 March, 2020
+Last Updated: 18 July, 2022
 
 author:
 Dave M. Hyman, PhD
@@ -169,19 +169,16 @@ def generate_CrIS_bg_cov(url_list, season_bins, lat_bins, lon_bins):
     # Global Variables
     #
     # --------------------------------------------------------------------------
-    NEdN = 0.05 # NEdN CrIS mid-wave avg: for Planck func cutoff (set cutoff as 0.5 * NEdN)
-    atrack, xtrack, fov = 45, 30, 9 # CrIS granule dimensions
-    band = np.arange(146,322+1) # relevant CrIS channels
-    n_mw = len(band) # number of relevant CrIS channels
-    # required CrIS variable names
-    varnames = ['obs_time_utc', 'lat', 'lon', 'rad_mw', 'wnum_mw', 'cal_qualflag', 'cal_lw_qualflag', 'cal_mw_qualflag', 'cal_sw_qualflag']
+    varnames, band, dims, NEdN = sensor_parameters('CrIS')
+    atrack, xtrack, fov = dims
     # --------------------------------------------------------------------------
     # Initialize Background Dimensions and Intermediate Variables
     #
     # --------------------------------------------------------------------------
-    n_lon = len(lon_bins)
-    n_lat = len(lat_bins)
-    n_seas = len(season_bins)
+    n_seas = len(season_bins) # number of seasonal bins (4)
+    n_lat = len(lat_bins) # number of latitude bins
+    n_lon = len(lon_bins) # number of longitude bins
+    n_mw = len(band) # number of relevant midwave IR channels
     N_in_bin = np.zeros((n_seas, n_lat, n_lon), dtype = np.int32)
     sum_yyT = np.zeros((n_seas, n_lat, n_lon, n_mw, n_mw), dtype = np.float64)
     sum_y = np.zeros((n_seas, n_lat, n_lon, n_mw), dtype = np.float64)
@@ -250,7 +247,7 @@ def CrIS_bg_cov_main(url_list, path_to_cov_data):
     if path_to_cov_data[-1] != '/':
         path_to_cov_data = path_to_cov_data + '/'
     #
-    prestr = path_to_cov_data + 'CrIS.bg.mw_cov.'
+    prestr = path_to_cov_data + 'SNPP.CrIS.bg.mw_cov.'
     #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):

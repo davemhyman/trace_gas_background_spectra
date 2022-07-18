@@ -1,5 +1,5 @@
 """
-Last Updated: 6 March, 2020
+Last Updated: 18 July, 2022
 
 author:
 Dave M. Hyman, PhD
@@ -49,7 +49,7 @@ def get_all_bg_mean_and_std(path_to_cov_database, season_bins, lat_bins, lon_bin
     if path_to_cov_database[-1] != '/':
         path_to_cov_database = path_to_cov_database + '/'
     #
-    prestr = path_to_cov_database + 'CrIS.bg.mw_cov.'
+    prestr = path_to_cov_database + 'SNPP.CrIS.bg.mw_cov.'
     #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):
@@ -202,7 +202,7 @@ def incremental_hist(spec_bin_array, spectrum):
     # --------------------------------------------------------------------------
     less_than = (spectrum[:,None] < spec_bin_array + bin_width[:,None])
     #
-    hist_array = 1.0 * (greater_or_equal * less_than)
+    hist_array = np.logical_and(greater_or_equal, less_than).astype(float)
     return hist_array
 ################################################################################
 #
@@ -285,29 +285,25 @@ def update_histograms_one_granule(all_hist, BT_bins, url, varnames, band, atrack
 #
 #
 ################################################################################
-def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
+def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins, path_to_cov_database):
     # --------------------------------------------------------------------------
     # Global Variables
     #
     # --------------------------------------------------------------------------
-    NEdN = 0.05 # NEdN CrIS mid-wave avg: for Planck func cutoff (set cutoff as 0.5 * NEdN)
-    atrack, xtrack, fov = 45, 30, 9 # CrIS granule dimensions
-    band = np.arange(146,322+1) # relevant CrIS channels
-    n_mw = len(band) # number of relevant CrIS channels
-    # required CrIS variable names
-    varnames = ['obs_time_utc', 'lat', 'lon', 'rad_mw', 'wnum_mw', 'cal_qualflag', 'cal_lw_qualflag', 'cal_mw_qualflag', 'cal_sw_qualflag']
+    varnames, band, dims, NEdN = sensor_parameters('CrIS')
+    atrack, xtrack, fov = dims
     # --------------------------------------------------------------------------
     # Initialize Background Dimensions
     #
     # --------------------------------------------------------------------------
-    n_seas = len(season_bins)
-    n_lat = len(lat_bins)
-    n_lon = len(lon_bins)
+    n_seas = len(season_bins) # number of seasonal bins (4)
+    n_lat = len(lat_bins) # number of latitude bins
+    n_lon = len(lon_bins) # number of longitude bins
+    n_mw = len(band) # number of relevant midwave IR channels
     # --------------------------------------------------------------------------
     # Get Background mean and std spectra
     #
     # --------------------------------------------------------------------------
-    path_to_cov_database = '/data/dhyman/CrIS_bg_cov_f32/'
     all_BT_mean, all_BT_std = get_all_bg_mean_and_std(path_to_cov_database, season_bins, lat_bins, lon_bins, n_mw)
     # --------------------------------------------------------------------------
     # Generate Histogram Domains
@@ -331,9 +327,9 @@ def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
         try:
             url = url_list[0]
             all_hist, wnum_mw = update_histograms_one_granule(all_hist, all_BT_bins, url, varnames, band, atrack, xtrack, fov, NEdN)
+            url_list.remove(url)
             #
         except Exception as ex:
-            urls_not_processed.append(url)
             print(ex)
             send_error_email(url, PrintException(), "dave.hyman@ssec.wisc.edu", "dave.hyman@ssec.wisc.edu")
             #
@@ -346,7 +342,7 @@ def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
     d_all_BT_bins = np.mean(np.diff(all_BT_bins, axis =-1), axis =-1) # (n_seas, n_lat, n_lon, n_mw)
     hist_integral_total = np.trapz(all_hist, all_BT_bins, axis =-1) # (n_seas, n_lat, n_lon, n_mw)
     all_pdf = all_hist / hist_integral_total[:,:,:,:,None] # (n_seas, n_lat, n_lon, n_mw, n_hist_bins)
-    all_cdf = 0.0 * all_pdf # (n_seas, n_lat, n_lon, n_mw, n_hist_bins)
+    all_cdf = np.zeros(all_pdf.shape) # (n_seas, n_lat, n_lon, n_mw, n_hist_bins)
     all_cdf[:,:,:,:,1:] = np.cumsum(all_pdf[:,:,:,:,0:-1] * d_all_BT_bins[:,:,:,:,None], axis =-1) # (n_seas, n_lat, n_lon, n_mw, n_hist_bins)
     return all_pdf, all_cdf, all_BT_bins, wnum_mw
 ################################################################################
@@ -354,7 +350,7 @@ def generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins):
 #
 #
 ################################################################################
-def CrIS_bg_marginals_main(url_list, path_to_marginals_database):
+def CrIS_bg_marginals_main(url_list, path_to_marginals_database, path_to_cov_database):
     # --------------------------------------------------------------------------
     # Main routine to compute background marginal distributions
     ## and save them into individual background bin files.
@@ -372,7 +368,7 @@ def CrIS_bg_marginals_main(url_list, path_to_marginals_database):
     # Generate all channel-wise marginal distributions
     #
     # --------------------------------------------------------------------------
-    all_pdf, all_cdf, all_BT_bins, wnum_mw = generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins)
+    all_pdf, all_cdf, all_BT_bins, wnum_mw = generate_CrIS_bg_marginals(url_list, season_bins, lat_bins, lon_bins, path_to_cov_database)
     # --------------------------------------------------------------------------
     # Dimensions of Data Arrays
     #
@@ -386,7 +382,7 @@ def CrIS_bg_marginals_main(url_list, path_to_marginals_database):
     if path_to_marginals_database[-1] != '/':
         path_to_marginals_database = path_to_marginals_database + '/'
     #
-    prestr = path_to_marginals_database + 'CrIS.bg.mw_marginals.'
+    prestr = path_to_marginals_database + 'SNPP.CrIS.bg.mw_marginals.'
     #
     for seas_num in range(n_seas):
         for lat_idx in range(n_lat):
